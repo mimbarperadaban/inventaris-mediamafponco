@@ -38,7 +38,7 @@
   .sc-ic { width: 44px; height: 44px; border-radius: 12px; border: 0; background: rgba(255,255,255,.16); color: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
   .sc-ic[aria-pressed=true] { background: #fff; color: #041B34; }
   .sc-ic svg { width: 22px; height: 22px; }
-  .sc-aim { position: absolute; z-index: 1; left: 50%; top: 46%; width: min(68vw, 300px); aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 22px; box-shadow: 0 0 0 100vmax rgba(0,0,0,.35); }
+  .sc-aim { position: absolute; z-index: 1; left: 50%; top: 46%; width: min(84vw, 380px); aspect-ratio: 4 / 3; transform: translate(-50%, -50%); border-radius: 22px; box-shadow: 0 0 0 100vmax rgba(0,0,0,.35); }
   .sc-aim i { position: absolute; width: 44px; height: 44px; border: 4px solid #fff; animation: br 1.6s ease-in-out infinite; }
   .sc-aim i:nth-child(1) { left: 0; top: 0; border-right: 0; border-bottom: 0; border-radius: 20px 0 0 0; }
   .sc-aim i:nth-child(2) { right: 0; top: 0; border-left: 0; border-bottom: 0; border-radius: 0 20px 0 0; }
@@ -65,7 +65,7 @@
 <div id="scanner" role="dialog" aria-modal="true" aria-label="Scan QR">
   <video id="scVideo" playsinline muted></video>
   <div class="sc-top">
-    <b>Scan label QR</b>
+    <b>Scan label</b>
     <button class="sc-ic" id="scTorch" aria-label="Senter" aria-pressed="false" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8l-1 6H9zM9 8v4l-1 10h8l-1-10V8M12 13v3"/></svg></button>
     <button class="sc-ic" id="scClose" aria-label="Tutup kamera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
@@ -146,7 +146,8 @@
       .then(function (s) {
         if (!sc.classList.contains('on')) { s.getTracks().forEach(function (t) { t.stop(); }); return; }
         stream = s; vid.srcObject = s; vid.play();
-        st.textContent = 'Arahkan kamera ke label QR';
+        st.textContent = 'Arahkan kamera ke barcode atau QR di label';
+        if (!detector) muatZXing();
         var track = s.getVideoTracks()[0], caps = track.getCapabilities ? track.getCapabilities() : {};
         if (caps.torch) torchBtn.hidden = false;
         timer = setInterval(baca, 200);
@@ -157,15 +158,55 @@
           : 'Kamera tidak bisa dibuka (' + (e && e.name || e) + ').';
       });
   }
+  /* Pembaca: barcode bawaan Chrome (Android) kalau ada; kalau tidak, ZXing (barcode) + jsQR (QR). */
+  var detector = null, zx = null, sibuk = false;
+  if ('BarcodeDetector' in window) {
+    BarcodeDetector.getSupportedFormats().then(function (f) {
+      var pakai = f.filter(function (x) { return x === 'code_128' || x === 'qr_code'; });
+      if (pakai.indexOf('code_128') >= 0) detector = new BarcodeDetector({ formats: pakai });
+    }).catch(function () {});
+  }
+  function muatZXing() {
+    if (window.ZXing || muatZXing.p) return;
+    muatZXing.p = true;
+    var sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js'; document.head.appendChild(sc);
+  }
+  function zxBaca(cv) {
+    if (!window.ZXing) return '';
+    if (!zx) {
+      var hints = new Map();
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.CODE_128]);
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      zx = new ZXing.MultiFormatReader(); zx.setHints(hints);
+    }
+    try { return zx.decode(new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.HTMLCanvasElementLuminanceSource(cv)))).getText(); }
+    catch (e) { return ''; }
+  }
   function baca() {
-    if (!vid.videoWidth || typeof jsQR !== 'function') return;
+    if (!vid.videoWidth || sibuk) return;
+    if (detector) {
+      sibuk = true;
+      detector.detect(vid).then(function (codes) {
+        sibuk = false;
+        for (var i = 0; i < codes.length; i++) { if (kodeDari(codes[i].rawValue)) return ketemu(codes[i].rawValue); }
+        if (codes.length) st.textContent = 'Kode terbaca, tapi bukan label inventaris';
+      }).catch(function () { sibuk = false; detector = null; muatZXing(); });
+      return;
+    }
     var s = Math.min(1, 720 / vid.videoWidth);
     canvas.width = vid.videoWidth * s; canvas.height = vid.videoHeight * s;
     g.drawImage(vid, 0, 0, canvas.width, canvas.height);
-    var r = jsQR(g.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' });
-    if (!r || !r.data) return;
-    var k = kodeDari(r.data);
-    if (!k) { st.textContent = 'QR terbaca, tapi bukan label inventaris'; return; }
+    var teks = '';
+    if (typeof jsQR === 'function') {
+      var r = jsQR(g.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' });
+      if (r && r.data) teks = r.data;
+    }
+    if (!teks) teks = zxBaca(canvas);
+    if (teks) ketemu(teks);
+  }
+  function ketemu(data) {
+    var k = kodeDari(data);
+    if (!k) { st.textContent = 'Kode terbaca, tapi bukan label inventaris'; return; }
     clearInterval(timer); timer = null;
     if (navigator.vibrate) navigator.vibrate(80);
     aim.classList.add('hit'); st.textContent = k + ' ditemukan';
