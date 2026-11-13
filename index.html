@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Inventaris MEDIAMAF</title>
-<meta name="description" content="Aplikasi inventaris Media & Multimedia MEDIAMAF Jatim">
+<meta name="description" content="Aplikasi inventaris & tugas Media dan Multimedia MEDIAMAF Jatim">
 <meta name="theme-color" content="#041B34">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="favicon.png">
@@ -24,8 +24,33 @@
   @keyframes s { from { transform: translateX(-120%); } to { transform: translateX(320%); } }
   #msg { max-width: 420px; padding: 0 24px; text-align: center; display: none; }
   #msg b { display: block; font-size: 17px; margin-bottom: 6px; }
-  #msg button { margin-top: 14px; background: #fff; color: #041B34; border: 0; border-radius: 10px; padding: 10px 18px; font-weight: 700; font-size: 15px; }
-  @media (prefers-reduced-motion: reduce) { .bar i { animation: none; } }
+  #msg button, .scan-btn { margin-top: 14px; background: #fff; color: #041B34; border: 0; border-radius: 12px; padding: 11px 18px; font-weight: 700; font-size: 15px; cursor: pointer; }
+
+  /* ---------- pemindai QR (kamera dibuka di halaman ini, bukan di dalam bingkai Google) ---------- */
+  #scanner { position: fixed; inset: 0; z-index: 10; background: #000; display: none; flex-direction: column; }
+  #scanner.on { display: flex; animation: up .3s ease-out; }
+  @keyframes up { from { transform: translateY(30px); opacity: 0; } }
+  #scanner video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .sc-top, .sc-bot { position: relative; z-index: 2; display: flex; align-items: center; gap: 10px; padding: 14px max(16px, env(safe-area-inset-right)) 14px max(16px, env(safe-area-inset-left)); background: linear-gradient(rgba(4,27,52,.85), rgba(4,27,52,0)); }
+  .sc-top { padding-top: max(14px, env(safe-area-inset-top)); }
+  .sc-bot { margin-top: auto; flex-direction: column; background: linear-gradient(rgba(4,27,52,0), rgba(4,27,52,.9)); padding-bottom: max(22px, env(safe-area-inset-bottom)); }
+  .sc-top b { flex: 1; font-size: 17px; }
+  .sc-ic { width: 44px; height: 44px; border-radius: 12px; border: 0; background: rgba(255,255,255,.16); color: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+  .sc-ic[aria-pressed=true] { background: #fff; color: #041B34; }
+  .sc-ic svg { width: 22px; height: 22px; }
+  .sc-aim { position: absolute; z-index: 1; left: 50%; top: 46%; width: min(68vw, 300px); aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 22px; box-shadow: 0 0 0 100vmax rgba(0,0,0,.35); }
+  .sc-aim i { position: absolute; width: 44px; height: 44px; border: 4px solid #fff; animation: br 1.6s ease-in-out infinite; }
+  .sc-aim i:nth-child(1) { left: 0; top: 0; border-right: 0; border-bottom: 0; border-radius: 20px 0 0 0; }
+  .sc-aim i:nth-child(2) { right: 0; top: 0; border-left: 0; border-bottom: 0; border-radius: 0 20px 0 0; }
+  .sc-aim i:nth-child(3) { left: 0; bottom: 0; border-right: 0; border-top: 0; border-radius: 0 0 0 20px; }
+  .sc-aim i:nth-child(4) { right: 0; bottom: 0; border-left: 0; border-top: 0; border-radius: 0 0 20px 0; }
+  .sc-aim b { position: absolute; left: 8%; right: 8%; height: 2px; background: linear-gradient(90deg, transparent, #9CC2EE, transparent); box-shadow: 0 0 14px #9CC2EE; animation: ln 2s ease-in-out infinite; }
+  .sc-aim.hit { animation: hit .45s ease; }
+  @keyframes br { 50% { opacity: .55; } }
+  @keyframes ln { 0% { top: 8%; } 50% { top: 90%; } 100% { top: 8%; } }
+  @keyframes hit { 0% { box-shadow: 0 0 0 100vmax rgba(0,0,0,.35), 0 0 0 0 rgba(30,180,90,.9); } 100% { box-shadow: 0 0 0 100vmax rgba(0,0,0,.35), 0 0 0 26px rgba(30,180,90,0); } }
+  #scStatus { margin: 0; text-align: center; font-size: 14px; opacity: .9; min-height: 21px; }
+  @media (prefers-reduced-motion: reduce) { .bar i, .sc-aim i, .sc-aim b { animation: none; } }
 </style>
 </head>
 <body>
@@ -36,10 +61,23 @@
   <div id="msg"></div>
 </div>
 <iframe id="app" title="Inventaris MEDIAMAF" allow="camera; clipboard-write; fullscreen"></iframe>
+
+<div id="scanner" role="dialog" aria-modal="true" aria-label="Scan QR">
+  <video id="scVideo" playsinline muted></video>
+  <div class="sc-top">
+    <b>Scan label QR</b>
+    <button class="sc-ic" id="scTorch" aria-label="Senter" aria-pressed="false" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8l-1 6H9zM9 8v4l-1 10h8l-1-10V8M12 13v3"/></svg></button>
+    <button class="sc-ic" id="scClose" aria-label="Tutup kamera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="sc-aim" id="scAim"><i></i><i></i><i></i><i></i><b></b></div>
+  <div class="sc-bot"><p id="scStatus">Mengaktifkan kamera…</p></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script>
   /* ====== SATU-SATUNYA YANG PERLU DIISI ======
      URL web app Apps Script (Deploy > Manage deployments), yang berakhiran /exec */
-  var APP_URL = 'https://script.google.com/macros/s/AKfycby41RGqXRc1zftcYPBQAYX3lzCqWuByJ8MhFH7XaCq-Dt3rqBvwNlQhtqTFB4Ev-gcX_w/exec';
+  var APP_URL = 'https://mimbarperadaban.github.io/inventaris-mediamafponco/';
   /* =========================================== */
 
   var wait = document.getElementById('wait'), msg = document.getElementById('msg'), frame = document.getElementById('app');
@@ -48,18 +86,99 @@
     msg.innerHTML = '<b>' + title + '</b>' + text + (retry ? '<br><button onclick="location.reload()">Coba lagi</button>' : '');
     document.querySelector('.bar').style.display = 'none';
   }
+  function kodeDari(t) { var m = String(t || '').toUpperCase().match(/\b(MED|MM)-\d{1,6}\b/); return m ? m[0] : ''; }
+
   if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(APP_URL)) {
     show('Belum diatur', 'Isi APP_URL di file index.html dengan URL web app (berakhiran /exec).');
   } else if (!navigator.onLine) {
     show('Tidak ada koneksi', 'Aplikasi inventaris butuh internet karena datanya langsung dari Google Sheet.', true);
   } else {
-    // Teruskan ?kode=MED-001 dari QR ke app supaya langsung membuka detail barang
-    var kode = new URLSearchParams(location.search).get('kode');
+    // QR yang di-scan pakai kamera HP membuka halaman ini dengan ?k=MED-001 (atau ?kode= untuk label lama)
+    var q = new URLSearchParams(location.search), kode = kodeDari(q.get('k') || q.get('kode'));
     frame.src = APP_URL + (kode ? '?kode=' + encodeURIComponent(kode) : '');
     frame.addEventListener('load', function () { setTimeout(function () { wait.classList.add('hide'); }, 300); });
     setTimeout(function () { if (!wait.classList.contains('hide')) show('Masih memuat…', 'Koneksi lambat. Tunggu sebentar atau coba lagi.', true); }, 20000);
+    if (kode && history.replaceState) history.replaceState(null, '', location.pathname); // supaya refresh tidak membuka barang yang sama lagi
   }
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
+
+  /* ---------- pesan ke app di dalam bingkai (bingkai Google berlapis, jadi kirim ke semua lapisan) ---------- */
+  function kirim(data) {
+    (function post(w, depth) {
+      try { w.postMessage(data, '*'); } catch (e) {}
+      if (depth > 3) return;
+      try { for (var i = 0; i < w.frames.length; i++) post(w.frames[i], depth + 1); } catch (e) {}
+    })(frame.contentWindow, 0);
+  }
+  function dariApp(e) { return /\.googleusercontent\.com$/.test(new URL(e.origin).hostname) || e.origin === 'https://script.google.com'; }
+  window.addEventListener('message', function (e) {
+    if (!dariApp(e)) return;
+    var d = e.data || {};
+    if (d.type === 'mm-hello') kirim({ type: 'mm-wrapper' });
+    else if (d.type === 'mm-scan') bukaKamera();
+    else if (d.type === 'mm-download' && /^data:/.test(d.dataUrl || '')) simpanFile(d.name || 'file', d.dataUrl);
+  });
+
+  /* ---------- unduh file (gambar label, ZIP) ---------- */
+  function simpanFile(name, dataUrl) {
+    fetch(dataUrl).then(function (r) { return r.blob(); }).then(function (blob) {
+      var a = document.createElement('a'), u = URL.createObjectURL(blob);
+      a.href = u; a.download = String(name).replace(/[\\/:*?"<>|]/g, '_'); document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(u); }, 5000);
+      kirim({ type: 'mm-saved', name: a.download });
+    });
+  }
+
+  /* ---------- kamera ---------- */
+  var sc = document.getElementById('scanner'), vid = document.getElementById('scVideo'), st = document.getElementById('scStatus');
+  var aim = document.getElementById('scAim'), torchBtn = document.getElementById('scTorch');
+  var stream = null, timer = null, canvas = document.createElement('canvas'), g = canvas.getContext('2d', { willReadFrequently: true });
+  function tutupKamera() {
+    if (timer) clearInterval(timer); timer = null;
+    if (stream) stream.getTracks().forEach(function (t) { t.stop(); }); stream = null;
+    sc.classList.remove('on'); torchBtn.hidden = true; torchBtn.setAttribute('aria-pressed', 'false');
+  }
+  function bukaKamera() {
+    if (sc.classList.contains('on')) return;
+    sc.classList.add('on'); st.textContent = 'Mengaktifkan kamera…';
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { st.textContent = 'Browser ini tidak mendukung kamera. Ketik kode barang di app.'; return; }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false })
+      .then(function (s) {
+        if (!sc.classList.contains('on')) { s.getTracks().forEach(function (t) { t.stop(); }); return; }
+        stream = s; vid.srcObject = s; vid.play();
+        st.textContent = 'Arahkan kamera ke label QR';
+        var track = s.getVideoTracks()[0], caps = track.getCapabilities ? track.getCapabilities() : {};
+        if (caps.torch) torchBtn.hidden = false;
+        timer = setInterval(baca, 200);
+      })
+      .catch(function (e) {
+        st.textContent = e && e.name === 'NotAllowedError'
+          ? 'Izin kamera ditolak. Buka ikon gembok/info di address bar → izinkan Kamera, lalu coba lagi.'
+          : 'Kamera tidak bisa dibuka (' + (e && e.name || e) + ').';
+      });
+  }
+  function baca() {
+    if (!vid.videoWidth || typeof jsQR !== 'function') return;
+    var s = Math.min(1, 720 / vid.videoWidth);
+    canvas.width = vid.videoWidth * s; canvas.height = vid.videoHeight * s;
+    g.drawImage(vid, 0, 0, canvas.width, canvas.height);
+    var r = jsQR(g.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' });
+    if (!r || !r.data) return;
+    var k = kodeDari(r.data);
+    if (!k) { st.textContent = 'QR terbaca, tapi bukan label inventaris'; return; }
+    clearInterval(timer); timer = null;
+    if (navigator.vibrate) navigator.vibrate(80);
+    aim.classList.add('hit'); st.textContent = k + ' ditemukan';
+    setTimeout(function () { aim.classList.remove('hit'); tutupKamera(); kirim({ type: 'mm-kode', kode: k }); }, 350);
+  }
+  document.getElementById('scClose').onclick = tutupKamera;
+  torchBtn.onclick = function () {
+    if (!stream) return;
+    var on = torchBtn.getAttribute('aria-pressed') !== 'true';
+    stream.getVideoTracks()[0].applyConstraints({ advanced: [{ torch: on }] }).then(function () { torchBtn.setAttribute('aria-pressed', String(on)); }).catch(function () {});
+  };
+  document.addEventListener('visibilitychange', function () { if (document.hidden) tutupKamera(); });
+  window.addEventListener('keydown', function (e) { if (e.key === 'Escape') tutupKamera(); });
 </script>
 </body>
 </html>
